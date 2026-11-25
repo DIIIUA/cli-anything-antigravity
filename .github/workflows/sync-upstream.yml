@@ -16,11 +16,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: python3 -m pip install --quiet pytest
+
       - name: Sync canonical resources from HKUDS/CLI-Anything
         run: bash scripts/sync-upstream.sh
 
-      - name: Run installer regression tests
-        run: bash tests/test_install.sh
+      - name: Run full regression suite
+        run: |
+          bash tests/test_install.sh
+          python3 -m pytest tests/test_verify_harness.py tests/test_install_race.py -v
 
       - name: Open sync PR if changes detected
         env:
@@ -37,8 +47,13 @@ jobs:
           git add references/ scripts/ UPSTREAM_SYNC.json
           git commit -m "chore(sync): update canonical resources from HKUDS/CLI-Anything"
           git push -f origin "${BRANCH}"
-          gh pr create \
-            --title "chore(sync): update canonical resources from HKUDS/CLI-Anything" \
-            --body "Automated upstream sync of canonical methodology and helper scripts from \`HKUDS/CLI-Anything\`." \
-            --base main \
-            --head "${BRANCH}" || true
+          EXISTING="$(gh pr list --head "${BRANCH}" --state open --json number --jq 'length')"
+          if [[ "${EXISTING}" == "0" ]]; then
+            gh pr create \
+              --title "chore(sync): update canonical resources from HKUDS/CLI-Anything" \
+              --body "Automated upstream sync of canonical methodology and helper scripts from \`HKUDS/CLI-Anything\`." \
+              --base main \
+              --head "${BRANCH}"
+          else
+            echo "Open PR already exists for ${BRANCH}."
+          fi

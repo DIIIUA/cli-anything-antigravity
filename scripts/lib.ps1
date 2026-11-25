@@ -53,6 +53,44 @@ function Resolve-CliAnythingWorkspaceRoot {
     return $full
 }
 
+function Acquire-CliAnythingInstallLock {
+    param(
+        [Parameter(Mandatory = $true)][string]$LockPath,
+        [int]$MaxAttempts = 50
+    )
+    for ($i = 0; $i -lt $MaxAttempts; $i++) {
+        try {
+            $fs = [System.IO.File]::Open(
+                $LockPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::None
+            )
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes("$PID`n")
+            $fs.Write($bytes, 0, $bytes.Length)
+            $fs.Flush()
+            return $fs
+        } catch [System.IO.IOException] {
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    throw "Could not acquire install lock: $LockPath`nAnother install may be running. If a previous run was killed, remove $LockPath and retry."
+}
+
+function Release-CliAnythingInstallLock {
+    param(
+        $LockHandle,
+        [string]$LockPath
+    )
+    if ($null -ne $LockHandle) {
+        try { $LockHandle.Close() } catch {}
+        try { $LockHandle.Dispose() } catch {}
+    }
+    if (-not [string]::IsNullOrWhiteSpace($LockPath) -and (Test-Path -LiteralPath $LockPath)) {
+        Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Test-CliAnythingInstallPath {
     param([Parameter(Mandatory = $true)][string]$Path)
     $key = Normalize-CliAnythingPathKey $Path

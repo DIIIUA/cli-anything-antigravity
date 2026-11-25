@@ -33,12 +33,28 @@ to_host_path() {
   printf '%s' "${p}"
 }
 
+detect_python_bin() {
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 -c "import sys" >/dev/null 2>&1; then
+      printf '%s' "python3"
+      return 0
+    fi
+  fi
+  if command -v python >/dev/null 2>&1; then
+    if python -c "import sys" >/dev/null 2>&1; then
+      printf '%s' "python"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 canonicalize_path() {
   local raw="${1}"
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "${raw}"
-  elif command -v python >/dev/null 2>&1; then
-    python -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "${raw}"
+  local pybin=""
+  pybin="$(detect_python_bin 2>/dev/null || true)"
+  if [[ -n "${pybin}" ]]; then
+    "${pybin}" -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "${raw}"
   else
     if [[ "${raw}" == "~"* ]]; then
       raw="${HOME}${raw:1}"
@@ -106,6 +122,30 @@ resolve_workspace_root() {
     realpath "${raw}"
   else
     (cd "${raw}" && pwd -P)
+  fi
+}
+
+# Atomic directory lock to serialize concurrent installs into the same plugins root.
+acquire_install_lock() {
+  local lock_dir="${1}"
+  local max_attempts="${2:-50}"
+  local attempt=0
+  while ! mkdir "${lock_dir}" 2>/dev/null; do
+    attempt=$((attempt + 1))
+    if [[ "${attempt}" -ge "${max_attempts}" ]]; then
+      echo "Could not acquire install lock: ${lock_dir}" >&2
+      echo "Another install may be running. If a previous run was killed, remove ${lock_dir} and retry." >&2
+      return 1
+    fi
+    sleep 0.1
+  done
+  printf '%s\n' "$$" > "${lock_dir}/pid" 2>/dev/null || true
+}
+
+release_install_lock() {
+  local lock_dir="${1}"
+  if [[ -n "${lock_dir}" && -d "${lock_dir}" ]]; then
+    rm -rf "${lock_dir}"
   fi
 }
 

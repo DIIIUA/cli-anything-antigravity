@@ -1,4 +1,4 @@
-# Regression tests for CLI-Anything for Google Antigravity (Community Edition, Windows PowerShell).
+# Regression tests for CLI-Anything for Google Antigravity v2.0 (Community Edition, Windows PowerShell).
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -27,10 +27,17 @@ $oldUserProfile = $env:USERPROFILE
 $oldPluginsHome = $env:ANTIGRAVITY_PLUGINS_HOME
 
 try {
-    New-Item -ItemType Directory -Path $userHome, $staleStaging, $workspaceDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $userHome, $workspaceDir -Force | Out-Null
+    $env:USERPROFILE = $userHome
+
+    $dryPlugins = Join-Path $tmpDir "dry-root\plugins"
+    $env:ANTIGRAVITY_PLUGINS_HOME = $dryPlugins
+    & (Join-Path $pluginSrc "scripts\install.ps1") -DryRun | Out-Null
+    if (Test-Path -LiteralPath $dryPlugins) { Fail "-DryRun created plugins directory" }
+
+    New-Item -ItemType Directory -Path $staleStaging -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $staleStaging "stale.txt") -Value "stale"
 
-    $env:USERPROFILE = $userHome
     $env:ANTIGRAVITY_PLUGINS_HOME = $pluginsHome
     & (Join-Path $pluginSrc "scripts\install.ps1")
 
@@ -41,15 +48,25 @@ try {
     Assert-File (Join-Path $installedDir "UPSTREAM_SYNC.json")
     Assert-File (Join-Path $installedDir "PLUGIN_ROOT.txt")
     Assert-File (Join-Path $installedDir "assets\logo.svg")
+    Assert-File (Join-Path $installedDir "hooks.json")
+    Assert-File (Join-Path $installedDir "rules\cli-anything-generator.md")
+    Assert-File (Join-Path $installedDir "agents\cli-anything-auditor.md")
     Assert-File $discoveryPointer
-    Assert-File (Join-Path $installedDir "skills\cli-anything\SKILL.md")
+    foreach ($skill in @("cli-anything", "cli-anything-refine", "cli-anything-test", "cli-anything-validate", "cli-anything-list")) {
+        Assert-File (Join-Path $installedDir "skills\$skill\SKILL.md")
+    }
+    Assert-File (Join-Path $installedDir "references\antigravity-tooling.md")
     Assert-File (Join-Path $installedDir "references\HARNESS.md")
-    Assert-File (Join-Path $installedDir "references\commands\cli-anything.md")
     Assert-File (Join-Path $installedDir "references\docs\PREVIEW_PROTOCOL.md")
     Assert-File (Join-Path $installedDir "scripts\repl_skin.py")
     Assert-File (Join-Path $installedDir "scripts\preview_bundle.py")
     Assert-File (Join-Path $installedDir "scripts\skill_generator.py")
+    Assert-File (Join-Path $installedDir "scripts\verify_harness.py")
+    Assert-File (Join-Path $installedDir "scripts\list_harnesses.py")
+    Assert-File (Join-Path $installedDir "scripts\pep420_guard.py")
     Assert-File (Join-Path $installedDir "scripts\templates\SKILL.md.template")
+
+    if (Test-Path -LiteralPath (Join-Path $pluginsHome ".cli-anything.lock")) { Fail "stale lock remained" }
 
     $stamp = (Get-Content -LiteralPath (Join-Path $installedDir "PLUGIN_ROOT.txt") -Raw).Trim()
     $pointer = (Get-Content -LiteralPath $discoveryPointer -Raw).Trim()
@@ -60,22 +77,30 @@ try {
     if (Test-Path -LiteralPath (Join-Path $installedDir "rules\AGENTS.md")) { Fail "must not ship always-on rules" }
 
     Assert-SameFile (Join-Path $pluginSrc "references\HARNESS.md") (Join-Path $installedDir "references\HARNESS.md")
-    Assert-SameFile (Join-Path $pluginSrc "scripts\repl_skin.py") (Join-Path $installedDir "scripts\repl_skin.py")
+    Assert-SameFile (Join-Path $pluginSrc "scripts\verify_harness.py") (Join-Path $installedDir "scripts\verify_harness.py")
 
     $py = Get-Command python -ErrorAction SilentlyContinue
     if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
-    & $py.Source -m py_compile `
+    & $py.Source -B -m py_compile `
         (Join-Path $installedDir "scripts\repl_skin.py") `
         (Join-Path $installedDir "scripts\preview_bundle.py") `
-        (Join-Path $installedDir "scripts\skill_generator.py")
+        (Join-Path $installedDir "scripts\skill_generator.py") `
+        (Join-Path $installedDir "scripts\verify_harness.py") `
+        (Join-Path $installedDir "scripts\list_harnesses.py") `
+        (Join-Path $installedDir "scripts\pep420_guard.py")
     if ($LASTEXITCODE -ne 0) { Fail "py_compile failed" }
 
+    # Simulate direct `agy plugin install` without PLUGIN_ROOT.txt
+    Remove-Item -LiteralPath (Join-Path $installedDir "PLUGIN_ROOT.txt") -Force
+    & $py.Source (Join-Path $installedDir "scripts\list_harnesses.py") --path $tmpDir --json | Out-Null
+    if ($LASTEXITCODE -ne 0) { Fail "list_harnesses failed without PLUGIN_ROOT.txt" }
+
     $manifest = Get-Content -LiteralPath (Join-Path $installedDir "plugin.json") -Raw | ConvertFrom-Json
-    $allowedKeys = @("name", "displayName", "version", "description", "author", "homepage", "repository", "logo", "suggestedPrompts", "disabled")
+    $allowedKeys = @("`$schema", "name", "displayName", "version", "description", "author", "homepage", "repository", "logo", "suggestedPrompts", "disabled", "license", "keywords", "skills", "extensions")
     foreach ($prop in $manifest.PSObject.Properties) {
         if ($allowedKeys -notcontains $prop.Name) { Fail "unknown plugin.json field: $($prop.Name)" }
     }
-    if ($manifest.name -ne "cli-anything") { Fail "manifest name mismatch" }
+    if ($manifest.name -ne "cli-anything" -or $manifest.license -ne "Apache-2.0") { Fail "manifest invalid" }
     if (@($manifest.suggestedPrompts).Count -ne 3) { Fail "expected 3 suggestedPrompts" }
 
     $refused = $false
@@ -91,8 +116,7 @@ try {
     Assert-File $discoveryPointer
 
     & (Join-Path $pluginSrc "scripts\uninstall.ps1")
-    if (Test-Path -LiteralPath $installedDir) { Fail "uninstall left dir" }
-    if (Test-Path -LiteralPath $discoveryPointer) { Fail "uninstall left pointer" }
+    if ((Test-Path -LiteralPath $installedDir) -or (Test-Path -LiteralPath $discoveryPointer)) { Fail "uninstall failed" }
 
     & (Join-Path $pluginSrc "scripts\install.ps1")
     $foreign = Join-Path $tmpDir "other-root"
@@ -100,7 +124,7 @@ try {
     & (Join-Path $pluginSrc "scripts\uninstall.ps1")
     if (((Get-Content -LiteralPath $discoveryPointer -Raw).Trim()) -ne $foreign) { Fail "foreign pointer changed" }
 
-    Write-Host "PASS: Community Edition Antigravity plugin tests passed."
+    Write-Host "PASS: Community Edition v2.0 Antigravity plugin tests passed."
 } finally {
     if (Test-Path -LiteralPath $tmpDir) { Remove-Item -LiteralPath $tmpDir -Recurse -Force }
     if ($null -ne $oldUserProfile) { $env:USERPROFILE = $oldUserProfile } else { Remove-Item Env:USERPROFILE -ErrorAction SilentlyContinue }

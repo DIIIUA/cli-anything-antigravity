@@ -17,8 +17,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: python3 -m pip install --quiet pytest
+
       - name: Test Antigravity plugin installer (bash)
         run: bash tests/test_install.sh
+
+      - name: Test verifier, lister, PEP 420 guard, and install race
+        run: python3 -m pytest tests/test_verify_harness.py tests/test_install_race.py -v
 
   test-installer-windows:
     runs-on: windows-latest
@@ -26,6 +37,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: python -m pip install --quiet pytest
+
       - name: Test Antigravity plugin installer (PowerShell)
         shell: pwsh
         run: ./tests/test_install.ps1
+
+      - name: Test verifier, lister, PEP 420 guard, and install race
+        shell: pwsh
+        run: python -m pytest tests/test_verify_harness.py tests/test_install_race.py -v

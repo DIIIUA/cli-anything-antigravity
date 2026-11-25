@@ -30,8 +30,17 @@ try {
 
     $refDir = Join-Path $repoRoot "references"
     $tplDir = Join-Path $repoRoot "scripts\templates"
-    if (Test-Path -LiteralPath $refDir) { Remove-Item -LiteralPath $refDir -Recurse -Force }
-    if (Test-Path -LiteralPath $tplDir) { Remove-Item -LiteralPath $tplDir -Recurse -Force }
+    foreach ($stale in @(
+        (Join-Path $refDir "HARNESS.md"),
+        (Join-Path $refDir "commands"),
+        (Join-Path $refDir "guides"),
+        (Join-Path $refDir "docs"),
+        $tplDir
+    )) {
+        if (Test-Path -LiteralPath $stale) {
+            Remove-Item -LiteralPath $stale -Recurse -Force
+        }
+    }
 
     New-Item -ItemType Directory -Path `
         (Join-Path $refDir "commands"), `
@@ -48,9 +57,10 @@ try {
     Copy-Item -Path (Join-Path $canonical "skill_generator.py") -Destination (Join-Path $repoRoot "scripts\skill_generator.py")
     Copy-Item -Path (Join-Path $canonical "templates\*") -Destination $tplDir
 
-    $commit = (git -C $Source rev-parse HEAD 2>$null | Out-String).Trim()
-    $short = (git -C $Source rev-parse --short HEAD 2>$null | Out-String).Trim()
-    if (-not $commit) { $commit = "unknown"; $short = "unknown" }
+    $commit = (git -C $Source rev-parse origin/main 2>$null | Out-String).Trim()
+    if (-not $commit) { $commit = (git -C $Source rev-parse HEAD 2>$null | Out-String).Trim() }
+    if (-not $commit) { $commit = "unknown" }
+    $short = if ($commit.Length -ge 7) { $commit.Substring(0, 7) } else { $commit }
 
     $meta = [ordered]@{
         upstream_repo   = "HKUDS/CLI-Anything"

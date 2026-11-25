@@ -50,7 +50,14 @@ PREVIEW="${SOURCE_DIR}/docs/PREVIEW_PROTOCOL.md"
 [[ -f "${CANONICAL}/HARNESS.md" ]] || { echo "Missing ${CANONICAL}/HARNESS.md" >&2; exit 1; }
 [[ -f "${PREVIEW}" ]] || { echo "Missing ${PREVIEW}" >&2; exit 1; }
 
-rm -rf "${REPO_ROOT}/references" "${REPO_ROOT}/scripts/templates"
+# Preserve antigravity-tooling.md while refreshing canonical methodology directories.
+rm -rf \
+  "${REPO_ROOT}/references/HARNESS.md" \
+  "${REPO_ROOT}/references/commands" \
+  "${REPO_ROOT}/references/guides" \
+  "${REPO_ROOT}/references/docs" \
+  "${REPO_ROOT}/scripts/templates"
+
 mkdir -p \
   "${REPO_ROOT}/references/commands" \
   "${REPO_ROOT}/references/guides" \
@@ -66,8 +73,9 @@ cp "${CANONICAL}/preview_bundle.py" "${REPO_ROOT}/scripts/preview_bundle.py"
 cp "${CANONICAL}/skill_generator.py" "${REPO_ROOT}/scripts/skill_generator.py"
 cp "${CANONICAL}/templates/"* "${REPO_ROOT}/scripts/templates/"
 
-UPSTREAM_COMMIT="$(git -C "${SOURCE_DIR}" rev-parse HEAD 2>/dev/null || echo unknown)"
-UPSTREAM_SHORT="$(git -C "${SOURCE_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# Prefer upstream origin/main commit when syncing from a local feature branch checkout.
+UPSTREAM_COMMIT="$(git -C "${SOURCE_DIR}" rev-parse origin/main 2>/dev/null || git -C "${SOURCE_DIR}" rev-parse HEAD 2>/dev/null || echo unknown)"
+UPSTREAM_SHORT="${UPSTREAM_COMMIT:0:7}"
 SYNCED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 cat > "${REPO_ROOT}/UPSTREAM_SYNC.json" <<EOF

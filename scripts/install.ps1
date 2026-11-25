@@ -1,6 +1,7 @@
 # Install CLI-Anything for Google Antigravity (Community Edition).
 param(
     [switch]$Force,
+    [switch]$DryRun,
     [string]$Workspace,
     [switch]$Help
 )
@@ -8,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($Help) {
-    Write-Host "Usage: .\install.ps1 [-Force] [-Workspace <path>]"
+    Write-Host "Usage: .\install.ps1 [-Force] [-DryRun] [-Workspace <path>]"
     Write-Host "Install CLI-Anything for Google Antigravity (Community Edition)."
     Write-Host "Global destination:    `$env:ANTIGRAVITY_PLUGINS_HOME\cli-anything (default: %USERPROFILE%\.gemini\config\plugins\cli-anything)"
     Write-Host "Workspace destination: <workspace>\.agents\plugins\cli-anything"
@@ -22,13 +23,24 @@ $pluginSrc = Split-Path -Parent $scriptDir
 
 $required = @(
     "plugin.json",
+    "hooks.json",
+    "rules\cli-anything-generator.md",
+    "agents\cli-anything-auditor.md",
     "skills\cli-anything\SKILL.md",
+    "skills\cli-anything-refine\SKILL.md",
+    "skills\cli-anything-test\SKILL.md",
+    "skills\cli-anything-validate\SKILL.md",
+    "skills\cli-anything-list\SKILL.md",
+    "references\antigravity-tooling.md",
     "references\HARNESS.md",
     "references\commands\cli-anything.md",
     "references\docs\PREVIEW_PROTOCOL.md",
     "scripts\repl_skin.py",
     "scripts\preview_bundle.py",
     "scripts\skill_generator.py",
+    "scripts\verify_harness.py",
+    "scripts\list_harnesses.py",
+    "scripts\pep420_guard.py",
     "scripts\templates\SKILL.md.template"
 )
 foreach ($req in $required) {
@@ -42,14 +54,17 @@ if (-not [string]::IsNullOrWhiteSpace($Workspace)) {
     $isGlobal = $false
     $wsRoot = Resolve-CliAnythingWorkspaceRoot -Raw $Workspace
     $pluginsHome = Join-Path $wsRoot ".agents\plugins"
-    New-Item -ItemType Directory -Path $pluginsHome -Force | Out-Null
+    if (-not $DryRun) {
+        New-Item -ItemType Directory -Path $pluginsHome -Force | Out-Null
+    }
 } else {
+    $createSwitch = -not $DryRun
     if ($env:ANTIGRAVITY_PLUGINS_HOME) {
-        $pluginsHome = Resolve-CliAnythingPluginsHome -Raw $env:ANTIGRAVITY_PLUGINS_HOME -Create
+        $pluginsHome = Resolve-CliAnythingPluginsHome -Raw $env:ANTIGRAVITY_PLUGINS_HOME -Create:$createSwitch
     } elseif ($env:USERPROFILE) {
-        $pluginsHome = Resolve-CliAnythingPluginsHome -Raw (Join-Path $env:USERPROFILE ".gemini\config\plugins") -Create
+        $pluginsHome = Resolve-CliAnythingPluginsHome -Raw (Join-Path $env:USERPROFILE ".gemini\config\plugins") -Create:$createSwitch
     } elseif ($env:HOME) {
-        $pluginsHome = Resolve-CliAnythingPluginsHome -Raw (Join-Path $env:HOME ".gemini\config\plugins") -Create
+        $pluginsHome = Resolve-CliAnythingPluginsHome -Raw (Join-Path $env:HOME ".gemini\config\plugins") -Create:$createSwitch
     } else {
         throw "ANTIGRAVITY_PLUGINS_HOME is not set and USERPROFILE/HOME is unavailable."
     }
@@ -57,24 +72,54 @@ if (-not [string]::IsNullOrWhiteSpace($Workspace)) {
 
 $discoveryPointer = Get-CliAnythingDiscoveryPointerPath
 $destDir = Join-Path $pluginsHome "cli-anything"
+
+if ($DryRun) {
+    Write-Host "[dry-run] Source:            $pluginSrc"
+    Write-Host "[dry-run] Destination:       $destDir"
+    if ($isGlobal) {
+        Write-Host "[dry-run] Discovery pointer: $discoveryPointer"
+    } else {
+        Write-Host "[dry-run] Discovery pointer: (unchanged for workspace install)"
+    }
+    exit 0
+}
+
+$lockPath = Join-Path $pluginsHome ".cli-anything.lock"
+$lockHandle = $null
 $stagingDir = $null
 $backupDir = $null
 
-if (Test-Path -LiteralPath $destDir) {
-    if (-not $Force) {
+try {
+    $lockHandle = Acquire-CliAnythingInstallLock -LockPath $lockPath
+
+    if ((Test-Path -LiteralPath $destDir) -and (-not $Force)) {
         throw "Refusing to overwrite existing plugin: $destDir`nRe-run with -Force to upgrade, or remove it manually."
     }
-}
 
-try {
     $stagingDir = Join-Path $pluginsHome (".cli-anything.tmp." + [System.Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $stagingDir | Out-Null
 
     Get-ChildItem -LiteralPath $pluginSrc -Force | ForEach-Object {
-        if ($_.Name -in @("tests", ".git", ".github", ".gitignore", "__pycache__")) {
+        if ($_.Name -in @("tests", ".git", ".github", ".gitignore", ".gitattributes", "__pycache__")) {
             return
         }
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $stagingDir $_.Name) -Recurse -Force
+    }
+
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
+    if ($py) {
+        $rs = Join-Path $stagingDir "scripts"
+        & $py.Source -B -m py_compile `
+            (Join-Path $rs "repl_skin.py") `
+            (Join-Path $rs "preview_bundle.py") `
+            (Join-Path $rs "skill_generator.py") `
+            (Join-Path $rs "verify_harness.py") `
+            (Join-Path $rs "list_harnesses.py") `
+            (Join-Path $rs "pep420_guard.py")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pre-publish py_compile failed for staged plugin scripts."
+        }
     }
 
     if (Test-Path -LiteralPath $destDir) {
@@ -95,20 +140,21 @@ try {
         Move-Item -LiteralPath $stagingDir -Destination $destDir
         $stagingDir = $null
     }
+
+    $pluginRoot = [System.IO.Path]::GetFullPath($destDir)
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText((Join-Path $pluginRoot "PLUGIN_ROOT.txt"), ($pluginRoot + [Environment]::NewLine), $utf8NoBom)
+
+    if ($isGlobal) {
+        $pointerDir = Split-Path -Parent $discoveryPointer
+        New-Item -ItemType Directory -Path $pointerDir -Force | Out-Null
+        [System.IO.File]::WriteAllText($discoveryPointer, ($pluginRoot + [Environment]::NewLine), $utf8NoBom)
+    }
 } finally {
     if ($stagingDir -and (Test-Path -LiteralPath $stagingDir)) {
         Remove-Item -LiteralPath $stagingDir -Recurse -Force
     }
-}
-
-$pluginRoot = [System.IO.Path]::GetFullPath($destDir)
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText((Join-Path $pluginRoot "PLUGIN_ROOT.txt"), ($pluginRoot + [Environment]::NewLine), $utf8NoBom)
-
-if ($isGlobal) {
-    $pointerDir = Split-Path -Parent $discoveryPointer
-    New-Item -ItemType Directory -Path $pointerDir -Force | Out-Null
-    [System.IO.File]::WriteAllText($discoveryPointer, ($pluginRoot + [Environment]::NewLine), $utf8NoBom)
+    Release-CliAnythingInstallLock -LockHandle $lockHandle -LockPath $lockPath
 }
 
 Write-Host "Installed CLI-Anything (Community Edition) for Antigravity to: $pluginRoot"
@@ -117,5 +163,5 @@ if ($isGlobal) {
 } else {
     Write-Host "Wrote PLUGIN_ROOT stamp (workspace-scoped install; global discovery pointer unchanged)."
 }
-Write-Host "Antigravity discovers plugins automatically; the cli-anything skill is available on your next turn."
+Write-Host "Slash commands ready on next turn: /cli-anything, /cli-anything-refine, /cli-anything-test, /cli-anything-validate, /cli-anything-list"
 Write-Host "Consumer Hub/skills are separate: npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y"
