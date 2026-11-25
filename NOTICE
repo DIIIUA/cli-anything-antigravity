@@ -1,0 +1,12 @@
+CLI-Anything for Google Antigravity (Community Edition)
+Copyright 2026 DIIIUA and contributors
+
+This repository is a standalone Community Edition adapter for Google Antigravity
+built upon and synced with HKUDS/CLI-Anything:
+  https://github.com/HKUDS/CLI-Anything
+
+Canonical methodology files in `references/` (`HARNESS.md`, `commands/`,
+`guides/`, `docs/PREVIEW_PROTOCOL.md`) and reusable Python utilities in
+`scripts/` (`repl_skin.py`, `preview_bundle.py`, `skill_generator.py`,
+`templates/SKILL.md.template`) are sourced unmodified from HKUDS/CLI-Anything
+under the Apache License, Version 2.0.

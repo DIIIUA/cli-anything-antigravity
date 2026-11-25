@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+PLUGIN_ROOT.txt
+.cli-anything.tmp.*
+.cli-anything.bak.*
+.DS_Store
+Thumbs.db

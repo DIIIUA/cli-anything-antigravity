@@ -1,0 +1,18 @@
+{
+  "name": "cli-anything",
+  "displayName": "CLI-Anything (Community Edition)",
+  "version": "1.0.0",
+  "description": "Community Edition Google Antigravity plugin for HKUDS/CLI-Anything: build, refine, test, validate, and list stateful CLI harnesses for any GUI application.",
+  "author": {
+    "name": "DIIIUA & cli-anything contributors",
+    "url": "https://github.com/DIIIUA/cli-anything-antigravity"
+  },
+  "homepage": "https://github.com/HKUDS/CLI-Anything",
+  "repository": "https://github.com/DIIIUA/cli-anything-antigravity",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Use CLI-Anything to build a complete CLI harness for ./your-software",
+    "Use CLI-Anything to refine an existing harness and expand test coverage",
+    "Use CLI-Anything to validate or list CLI-Anything harnesses in this workspace"
+  ]
+}

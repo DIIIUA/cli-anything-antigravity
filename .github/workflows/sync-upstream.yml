@@ -1,0 +1,44 @@
+name: Sync Upstream HKUDS/CLI-Anything
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Sync canonical resources from HKUDS/CLI-Anything
+        run: bash scripts/sync-upstream.sh
+
+      - name: Run installer regression tests
+        run: bash tests/test_install.sh
+
+      - name: Open sync PR if changes detected
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet && [[ -z "$(git status --porcelain)" ]]; then
+            echo "Already up to date with HKUDS/CLI-Anything."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="sync/upstream-$(date -u +%Y%m%d)"
+          git checkout -B "${BRANCH}"
+          git add references/ scripts/ UPSTREAM_SYNC.json
+          git commit -m "chore(sync): update canonical resources from HKUDS/CLI-Anything"
+          git push -f origin "${BRANCH}"
+          gh pr create \
+            --title "chore(sync): update canonical resources from HKUDS/CLI-Anything" \
+            --body "Automated upstream sync of canonical methodology and helper scripts from \`HKUDS/CLI-Anything\`." \
+            --base main \
+            --head "${BRANCH}" || true
