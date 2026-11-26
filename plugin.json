@@ -2,8 +2,8 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "cli-anything",
   "displayName": "CLI-Anything",
-  "version": "2.0.0",
-  "description": "Build, refine, test, validate, and list stateful CLI-Anything harnesses for any GUI application in Google Antigravity.",
+  "version": "1.0.0",
+  "description": "Build, refine, test, validate, and list stateful CLI-Anything harnesses for any GUI application in Google Antigravity via 5 slash commands.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "/cli-anything ./your-software",

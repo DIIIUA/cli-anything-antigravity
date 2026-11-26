@@ -53,7 +53,7 @@ class CheckResult:
 
 
 def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace")
+    return path.read_text(encoding="utf-8-sig", errors="replace")
 
 
 def _normalize_lf(text: str) -> str:
@@ -241,7 +241,16 @@ def _check_packaging(harness: Path, software_slug: str, module: Path | None) -> 
     checks.append(CheckResult("packaging-file", "packaging", PASS, f"{pkg_file.name} present"))
     text = _read_text(pkg_file)
 
-    if "find_namespace_packages" in text or "packages.find" in text or "cli_anything.*" in text:
+    has_explicit_ns_pkg = bool(
+        pkg_file.name == "pyproject.toml"
+        and re.search(r'["\']cli_anything\.[a-zA-Z0-9_]+["\']', text)
+    )
+    if (
+        "find_namespace_packages" in text
+        or "packages.find" in text
+        or "cli_anything.*" in text
+        or has_explicit_ns_pkg
+    ):
         checks.append(CheckResult("namespace-packages", "packaging", PASS, "namespace package discovery configured"))
     else:
         checks.append(
@@ -249,7 +258,7 @@ def _check_packaging(harness: Path, software_slug: str, module: Path | None) -> 
                 "namespace-packages",
                 "packaging",
                 FAIL,
-                f"{pkg_file.name} does not declare find_namespace_packages(include=['cli_anything.*'])",
+                f"{pkg_file.name} does not declare namespace packaging for cli_anything.*",
             )
         )
 

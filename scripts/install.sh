@@ -144,6 +144,13 @@ done < <(find "${PLUGIN_SRC}" -mindepth 1 -maxdepth 1 -print0)
 
 PYBIN="$(detect_python_bin 2>/dev/null || true)"
 if [[ -n "${PYBIN}" ]]; then
+  if [[ "${PYBIN}" == "python3" && -f "${STAGING_DIR}/hooks.json" ]] && ! command -v python >/dev/null 2>&1; then
+    "${PYBIN}" -c '
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+p.write_text(p.read_text(encoding="utf-8").replace("python -S ./scripts/pep420_guard.py", "python3 -S ./scripts/pep420_guard.py"), encoding="utf-8")
+' "${STAGING_DIR}/hooks.json"
+  fi
   "${PYBIN}" -B -m py_compile \
     "${STAGING_DIR}/scripts/repl_skin.py" \
     "${STAGING_DIR}/scripts/preview_bundle.py" \

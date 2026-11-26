@@ -152,4 +152,4 @@ printf '%s\n' "${FOREIGN_ROOT}" > "${DISCOVERY_POINTER}"
 ANTIGRAVITY_PLUGINS_HOME="${PLUGINS_HOME}" bash "${PLUGIN_SRC}/scripts/uninstall.sh"
 [[ ! -e "${INSTALLED_DIR}" && "$(tr -d '\r\n' < "${DISCOVERY_POINTER}")" == "${FOREIGN_ROOT}" ]] || fail "foreign pointer changed"
 
-echo "PASS: Community Edition v2.0 Antigravity plugin tests passed."
+echo "PASS: Community Edition Antigravity plugin tests passed."

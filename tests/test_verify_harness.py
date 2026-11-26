@@ -252,3 +252,33 @@ def test_pep420_guard_subprocess_and_malformed_stdin_fail_open() -> None:
     )
     assert proc.returncode == 0
     assert json.loads(proc.stdout)["decision"] == "allow"
+
+
+def test_verify_handles_utf8_bom_and_pyproject_explicit_namespace(tmp_path: Path) -> None:
+    harness = _create_valid_harness(tmp_path, "bomapp")
+    # Add UTF-8 BOM to a Python source file (valid for Python's parser)
+    helper = harness / "cli_anything" / "bomapp" / "utils" / "bom_helper.py"
+    helper.write_bytes(b"\xef\xbb\xbfdef ok():\n    return True\n")
+    # Replace setup.py with pyproject.toml declaring explicit cli_anything sub-package
+    (harness / "setup.py").unlink()
+    (harness / "pyproject.toml").write_text(
+        """[project]
+name = "cli-anything-bomapp"
+version = "1.0.0"
+requires-python = ">=3.10"
+
+[project.scripts]
+cli-anything-bomapp = "cli_anything.bomapp.bomapp_cli:main"
+
+[tool.setuptools]
+packages = ["cli_anything.bomapp", "cli_anything.bomapp.core", "cli_anything.bomapp.utils"]
+
+[tool.setuptools.package-data]
+"cli_anything.bomapp" = ["skills/*.md"]
+""",
+        encoding="utf-8",
+    )
+    result = verify_harness.verify_harness(
+        harness, strict=True, canonical_repl_skin=CANONICAL_REPL_SKIN
+    )
+    assert result["ok"] is True, result["checks"]

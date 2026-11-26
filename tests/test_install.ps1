@@ -1,4 +1,4 @@
-# Regression tests for CLI-Anything for Google Antigravity v2.0 (Community Edition, Windows PowerShell).
+# Regression tests for CLI-Anything for Google Antigravity (Community Edition, Windows PowerShell).
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -124,7 +124,7 @@ try {
     & (Join-Path $pluginSrc "scripts\uninstall.ps1")
     if (((Get-Content -LiteralPath $discoveryPointer -Raw).Trim()) -ne $foreign) { Fail "foreign pointer changed" }
 
-    Write-Host "PASS: Community Edition v2.0 Antigravity plugin tests passed."
+    Write-Host "PASS: Community Edition Antigravity plugin tests passed."
 } finally {
     if (Test-Path -LiteralPath $tmpDir) { Remove-Item -LiteralPath $tmpDir -Recurse -Force }
     if ($null -ne $oldUserProfile) { $env:USERPROFILE = $oldUserProfile } else { Remove-Item Env:USERPROFILE -ErrorAction SilentlyContinue }
