@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install pytest and CLI harness deps
-        run: python3 -m pip install --quiet pytest click prompt-toolkit
+        run: python3 -m pip install --quiet pytest click prompt-toolkit setuptools wheel
 
       - name: Test Antigravity plugin installer (bash)
         run: bash tests/test_install.sh
@@ -50,7 +50,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install pytest and CLI harness deps
-        run: python -m pip install --quiet pytest click prompt-toolkit
+        run: python -m pip install --quiet pytest click prompt-toolkit setuptools wheel
 
       - name: Test Antigravity plugin installer (PowerShell)
         shell: pwsh
