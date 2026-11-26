@@ -107,21 +107,25 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   exit 0
 fi
 
-LOCK_DIR="${PLUGINS_HOME}/.cli-anything.lock"
+LOCK_PATH="${PLUGINS_HOME}/.cli-anything.lock"
 LOCK_HELD=0
 STAGING_DIR=""
+MAIN_PID="${BASHPID:-$$}"
 
 cleanup() {
+  if [[ "${BASHPID:-$$}" != "${MAIN_PID}" ]]; then
+    return 0
+  fi
   if [[ -n "${STAGING_DIR}" && -d "${STAGING_DIR}" ]]; then
     rm -rf "${STAGING_DIR}"
   fi
   if [[ "${LOCK_HELD}" -eq 1 ]]; then
-    release_install_lock "${LOCK_DIR}"
+    release_install_lock "${LOCK_PATH}"
   fi
 }
 trap cleanup EXIT
 
-acquire_install_lock "${LOCK_DIR}"
+acquire_install_lock "${LOCK_PATH}"
 LOCK_HELD=1
 
 if [[ -e "${DEST_DIR}" && "${FORCE}" -ne 1 ]]; then
@@ -161,6 +165,11 @@ p.write_text(p.read_text(encoding="utf-8").replace("python -S ./scripts/pep420_g
 fi
 
 if [[ -e "${DEST_DIR}" ]]; then
+  if [[ "${FORCE}" -ne 1 ]]; then
+    echo "Refusing to overwrite existing plugin: ${DEST_DIR}" >&2
+    echo "Re-run with --force to upgrade, or remove it manually." >&2
+    exit 1
+  fi
   BACKUP_DIR="${PLUGINS_HOME}/.cli-anything.bak.$(date +%s).$$"
   mv "${DEST_DIR}" "${BACKUP_DIR}"
   if ! mv "${STAGING_DIR}" "${DEST_DIR}"; then

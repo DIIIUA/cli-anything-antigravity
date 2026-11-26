@@ -125,27 +125,29 @@ resolve_workspace_root() {
   fi
 }
 
-# Atomic directory lock to serialize concurrent installs into the same plugins root.
+# Atomic exclusive lock file (POSIX O_CREAT|O_EXCL via shell noclobber) to serialize
+# concurrent installs into the same plugins root. Avoids external `mkdir` races observed
+# in some coreutils implementations (e.g. uutils coreutils 0.8.0 on Ubuntu 26.04) and
+# matches the Windows PowerShell FileMode.CreateNew lock on the same `.cli-anything.lock` path.
 acquire_install_lock() {
-  local lock_dir="${1}"
+  local lock_path="${1}"
   local max_attempts="${2:-50}"
   local attempt=0
-  while ! mkdir "${lock_dir}" 2>/dev/null; do
+  while ! ( set -C; printf '%s\n' "$$" > "${lock_path}" ) 2>/dev/null; do
     attempt=$((attempt + 1))
     if [[ "${attempt}" -ge "${max_attempts}" ]]; then
-      echo "Could not acquire install lock: ${lock_dir}" >&2
-      echo "Another install may be running. If a previous run was killed, remove ${lock_dir} and retry." >&2
+      echo "Could not acquire install lock: ${lock_path}" >&2
+      echo "Another install may be running. If a previous run was killed, remove ${lock_path} and retry." >&2
       return 1
     fi
     sleep 0.1
   done
-  printf '%s\n' "$$" > "${lock_dir}/pid" 2>/dev/null || true
 }
 
 release_install_lock() {
-  local lock_dir="${1}"
-  if [[ -n "${lock_dir}" && -d "${lock_dir}" ]]; then
-    rm -rf "${lock_dir}"
+  local lock_path="${1}"
+  if [[ -n "${lock_path}" && -e "${lock_path}" ]]; then
+    rm -rf "${lock_path}"
   fi
 }
 
