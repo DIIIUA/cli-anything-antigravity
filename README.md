@@ -70,6 +70,25 @@ bash cli-anything-antigravity/scripts/uninstall.sh          # or --workspace <re
 | **PEP 420 Hook** | `hooks.json` + `scripts/pep420_guard.py` | Opt-in (`"enabled": false` by default) `PreToolUse` guard blocking `cli_anything/__init__.py` |
 | **Tooling Runbook** | `references/antigravity-tooling.md` | App/CLI/IDE paths, `~/.gemini/config/skills.json` bridge for `cli-hub matrix` & newly generated CLI skills, `/goal`/`/swarm` recipes, Failure Playbook |
 
+## Dogfooded Bonus: `cli-anything-antigravity` CLI Harness
+
+This repository also ships a full, verified CLI-Anything harness built **using this very plugin** for Google Antigravity itself (`harness/antigravity/agent-harness/`, passing `verify_harness.py --strict` **30/30**):
+
+- Stateful `.agyproj.json` authoring with undo/redo, locked JSON saves, auto-save, and `--dry-run`.
+- Author, import, validate, and export official Antigravity v1 `plugin.json`, `skills/*/SKILL.md`, `rules/*.md` (trigger/glob/24 KB checks), `agents/*.md`, `hooks.json`, `mcp_config.json` (with automatic secret redaction), and `skills.json` / `plugins.json` (including `discovery bridge-clihub`).
+- Generate AST-verified `google-antigravity` Python SDK runner scripts (`LocalAgentConfig` / `LiteRTAgentConfig` / `LocalOpenAIAgentConfig`).
+- Wrap the live installed `antigravity-ide` / `agy` CLI (`ide detect`, `ide version`, `ide extensions`, `ide inspect-host`) without ever touching private `config.json`.
+
+Install the dogfooded CLI harness:
+
+```bash
+pip install -e ./harness/antigravity/agent-harness
+cli-anything-antigravity --json ide detect
+cli-anything-antigravity --json plugin validate-dir ~/.gemini/config/plugins/cli-anything
+```
+
+To expose its generated skill (`harness/skills/cli-anything-antigravity/SKILL.md`) inside Antigravity App, register `./harness/skills` in `.agents/skills.json` or `~/.gemini/config/skills.json`.
+
 ## Consumer Track & `cli-hub` Matrix Bridge
 
 ```bash

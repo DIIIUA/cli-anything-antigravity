@@ -87,6 +87,7 @@ POINTER="$(tr -d '\r\n' < "${DISCOVERY_POINTER}")"
 
 [[ -d "${STALE_STAGING_DIR}" ]] || fail "touched stale staging dir"
 [[ ! -d "${INSTALLED_DIR}/tests" ]] || fail "copied tests/"
+[[ ! -d "${INSTALLED_DIR}/harness" ]] || fail "copied harness/"
 [[ ! -d "${INSTALLED_DIR}/.github" ]] || fail "copied .github/"
 [[ ! -e "${INSTALLED_DIR}/rules/AGENTS.md" ]] || fail "must not ship always-on rules/AGENTS.md"
 

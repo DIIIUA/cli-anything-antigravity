@@ -100,7 +100,7 @@ try {
     New-Item -ItemType Directory -Path $stagingDir | Out-Null
 
     Get-ChildItem -LiteralPath $pluginSrc -Force | ForEach-Object {
-        if ($_.Name -in @("tests", ".git", ".github", ".gitignore", ".gitattributes", "__pycache__")) {
+        if ($_.Name -in @("tests", "harness", ".git", ".github", ".gitignore", ".gitattributes", "__pycache__")) {
             return
         }
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $stagingDir $_.Name) -Recurse -Force

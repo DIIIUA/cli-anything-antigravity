@@ -139,7 +139,7 @@ STAGING_DIR="$(mktemp -d "${PLUGINS_HOME}/.cli-anything.tmp.XXXXXX")"
 while IFS= read -r -d '' entry; do
   base="$(basename "${entry}")"
   case "${base}" in
-    tests|.git|.github|.gitignore|.gitattributes|__pycache__)
+    tests|harness|.git|.github|.gitignore|.gitattributes|__pycache__)
       continue
       ;;
   esac
