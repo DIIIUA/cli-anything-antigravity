@@ -514,29 +514,41 @@ def _check_docs_and_tests(
             )
         )
 
-    if repo_root is not None:
-        slug_candidates = [
-            f"cli-anything-{_slugify(software_dir_name)}",
-            f"cli-anything-{_slugify(module.name)}",
-        ]
-        found_root_skill = None
-        for slug in slug_candidates:
-            cand = repo_root / "skills" / slug / "SKILL.md"
-            if cand.is_file():
-                found_root_skill = cand
-                break
-        if found_root_skill is not None:
-            checks.append(CheckResult("root-skill-mirror", "skills", PASS, f"canonical repo skill present: {found_root_skill.relative_to(repo_root)}"))
-        else:
+    skills_base = repo_root if repo_root is not None else harness.parent.parent
+    slug_candidates = [
+        f"cli-anything-{_slugify(software_dir_name)}",
+        f"cli-anything-{_slugify(module.name)}",
+    ]
+    found_root_skill = None
+    for slug in slug_candidates:
+        cand = skills_base / "skills" / slug / "SKILL.md"
+        if cand.is_file():
+            found_root_skill = cand
+            break
+    if found_root_skill is not None:
+        rel_skill = found_root_skill.relative_to(skills_base)
+        if pkg_skill.is_file() and _normalize_lf(_read_text(found_root_skill)) != _normalize_lf(_read_text(pkg_skill)):
             checks.append(
                 CheckResult(
                     "root-skill-mirror",
                     "skills",
                     WARN,
-                    f"canonical repo-root skill missing (expected skills/{slug_candidates[0]}/SKILL.md)",
+                    f"canonical skill ({rel_skill}) differs from packaged cli_anything/{module.name}/skills/SKILL.md",
                     severity="warn",
                 )
             )
+        else:
+            checks.append(CheckResult("root-skill-mirror", "skills", PASS, f"canonical skill synced: {rel_skill}"))
+    elif repo_root is not None:
+        checks.append(
+            CheckResult(
+                "root-skill-mirror",
+                "skills",
+                WARN,
+                f"canonical repo-root skill missing (expected skills/{slug_candidates[0]}/SKILL.md)",
+                severity="warn",
+            )
+        )
 
     return checks
 

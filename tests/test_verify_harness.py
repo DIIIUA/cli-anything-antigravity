@@ -282,3 +282,27 @@ packages = ["cli_anything.bomapp", "cli_anything.bomapp.core", "cli_anything.bom
         harness, strict=True, canonical_repl_skin=CANONICAL_REPL_SKIN
     )
     assert result["ok"] is True, result["checks"]
+
+
+def test_verify_detects_standalone_canonical_skill_drift(tmp_path: Path) -> None:
+    harness = _create_valid_harness(tmp_path, "syncapp")
+    pkg_skill = harness / "cli_anything" / "syncapp" / "skills" / "SKILL.md"
+    canon_skill = tmp_path / "skills" / "cli-anything-syncapp" / "SKILL.md"
+    canon_skill.parent.mkdir(parents=True, exist_ok=True)
+    canon_skill.write_text(pkg_skill.read_text(encoding="utf-8"), encoding="utf-8")
+
+    ok_res = verify_harness.verify_harness(
+        harness, strict=True, canonical_repl_skin=CANONICAL_REPL_SKIN
+    )
+    checks_ok = {c["id"]: c for c in ok_res["checks"]}
+    assert ok_res["ok"] is True
+    assert checks_ok["root-skill-mirror"]["status"] == "pass"
+
+    # Mutate canonical skill without updating packaged copy
+    canon_skill.write_text(pkg_skill.read_text(encoding="utf-8") + "\nextra\n", encoding="utf-8")
+    drift_res = verify_harness.verify_harness(
+        harness, strict=True, canonical_repl_skin=CANONICAL_REPL_SKIN
+    )
+    checks_drift = {c["id"]: c for c in drift_res["checks"]}
+    assert drift_res["ok"] is False
+    assert checks_drift["root-skill-mirror"]["status"] == "warn"

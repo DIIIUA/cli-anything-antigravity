@@ -125,7 +125,8 @@ python "{PLUGIN_ROOT}/scripts/verify_harness.py" "<software-root>/agent-harness"
   - macOS / Linux: `CLI_ANYTHING_FORCE_INSTALLED=1 python3 -m pytest cli_anything/<software>/tests/ -v -s`
 - PATH verification: `Get-Command cli-anything-<software>` (Windows) or `command -v cli-anything-<software>` (POSIX).
 - Always specify `encoding="utf-8"` when reading/writing JSON, XML, `TEST.md`, and `SKILL.md`.
-- After Phase 6.5, explain how to expose the generated `cli-anything-<software>` skill to Antigravity (see `{PLUGIN_ROOT}/references/antigravity-tooling.md`).
+- On Windows, guard `ReplSkin.create_prompt_session()` with `sys.stdin.isatty() and sys.stdout.isatty()` (falling back to `None` in piped/agent terminals) and pass `windows_expand_args=False` to Click `cli()` if commands accept wildcard patterns.
+- After Phase 6.5 (`skill_generator.py`), review and verify the generated examples and YAML `description` in **both** canonical (`skills/cli-anything-<software>/SKILL.md`) and packaged (`cli_anything/<software>/skills/SKILL.md`) copies, and explain how to expose the skill to Antigravity (see `{PLUGIN_ROOT}/references/antigravity-tooling.md`).
 
 ## 7. Output Expectations
 
