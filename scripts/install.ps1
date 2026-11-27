@@ -84,6 +84,12 @@ if ($DryRun) {
     exit 0
 }
 
+$srcKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $pluginSrc)
+$destCheckKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $destDir)
+if (($srcKey -eq $destCheckKey) -or $srcKey.StartsWith("$destCheckKey\")) {
+    throw "Refusing to install into source directory or an ancestor of it: $destDir"
+}
+
 $lockPath = Join-Path $pluginsHome ".cli-anything.lock"
 $lockHandle = $null
 $stagingDir = $null
@@ -98,24 +104,61 @@ try {
 
     $stagingDir = Join-Path $pluginsHome (".cli-anything.tmp." + [System.Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $stagingDir | Out-Null
+    $pluginsHomeKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $pluginsHome)
     $lockKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $lockPath)
     $stagingKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $stagingDir)
     $destKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $destDir)
 
-    Get-ChildItem -LiteralPath $pluginSrc -Force | ForEach-Object {
-        if ($_.Name -in @("tests", "harness", ".git", ".github", ".gitignore", ".gitattributes", ".agents", "__pycache__")) {
-            return
+    function Copy-PluginTree {
+        param(
+            [Parameter(Mandatory = $true)][string]$SrcDir,
+            [Parameter(Mandatory = $true)][string]$DstDir,
+            [bool]$IsRoot = $false
+        )
+        New-Item -ItemType Directory -Path $DstDir -Force | Out-Null
+        $excludedNames = if ($IsRoot) {
+            @("tests", "harness", ".git", ".github", ".gitignore", ".gitattributes", ".agents", "__pycache__")
+        } else {
+            @(".git", ".agents", "__pycache__")
         }
-        $entryKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $_.FullName)
-        $entryPrefix = "$entryKey\"
-        if (
-            ($stagingKey -eq $entryKey) -or $stagingKey.StartsWith($entryPrefix) -or
-            ($destKey -eq $entryKey) -or $destKey.StartsWith($entryPrefix) -or
-            ($lockKey -eq $entryKey) -or $lockKey.StartsWith($entryPrefix)
-        ) {
-            return
+        Get-ChildItem -LiteralPath $SrcDir -Force | ForEach-Object {
+            if ($_.Name -in $excludedNames) {
+                return
+            }
+            $entryKey = Normalize-CliAnythingPathKey (Resolve-CliAnythingRealPath -Path $_.FullName)
+            if (
+                ($entryKey -eq $pluginsHomeKey) -or
+                ($entryKey -eq $stagingKey) -or
+                ($entryKey -eq $destKey) -or
+                ($entryKey -eq $lockKey)
+            ) {
+                return
+            }
+            $entryPrefix = "$entryKey\"
+            if (
+                $_.PSIsContainer -and (
+                    $pluginsHomeKey.StartsWith($entryPrefix) -or
+                    $stagingKey.StartsWith($entryPrefix) -or
+                    $destKey.StartsWith($entryPrefix) -or
+                    $lockKey.StartsWith($entryPrefix)
+                )
+            ) {
+                Copy-PluginTree -SrcDir $_.FullName -DstDir (Join-Path $DstDir $_.Name) -IsRoot $false
+                return
+            }
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $DstDir $_.Name) -Recurse -Force
         }
-        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $stagingDir $_.Name) -Recurse -Force
+    }
+
+    Copy-PluginTree -SrcDir $pluginSrc -DstDir $stagingDir -IsRoot $true
+
+    foreach ($req in $required) {
+        if (-not (Test-Path -LiteralPath (Join-Path $stagingDir $req) -PathType Leaf)) {
+            throw "Staged plugin is missing required file: $req"
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $stagingDir "scripts\_toml_fallback.py") -PathType Leaf)) {
+        throw "Staged plugin is missing required file: scripts\_toml_fallback.py"
     }
 
     $py = Get-Command python -ErrorAction SilentlyContinue

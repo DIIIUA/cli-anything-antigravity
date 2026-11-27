@@ -107,6 +107,13 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   exit 0
 fi
 
+SRC_KEY="$(normalize_path_key "$(resolve_real_path "${PLUGIN_SRC}")")"
+DEST_CHECK_KEY="$(normalize_path_key "$(resolve_real_path "${DEST_DIR}")")"
+if [[ "${SRC_KEY}" == "${DEST_CHECK_KEY}" || "${SRC_KEY}" == "${DEST_CHECK_KEY}/"* ]]; then
+  echo "Refusing to install into source directory or an ancestor of it: ${DEST_DIR}" >&2
+  exit 1
+fi
+
 LOCK_PATH="${PLUGINS_HOME}/.cli-anything.lock"
 LOCK_HELD=0
 STAGING_DIR=""
@@ -135,23 +142,70 @@ if [[ -e "${DEST_DIR}" && "${FORCE}" -ne 1 ]]; then
 fi
 
 STAGING_DIR="$(mktemp -d "${PLUGINS_HOME}/.cli-anything.tmp.XXXXXX")"
+PLUGINS_HOME_KEY="$(normalize_path_key "$(resolve_real_path "${PLUGINS_HOME}")")"
 LOCK_KEY="$(normalize_path_key "$(resolve_real_path "${LOCK_PATH}")")"
 STAGING_KEY="$(normalize_path_key "$(resolve_real_path "${STAGING_DIR}")")"
 DEST_KEY="$(normalize_path_key "$(resolve_real_path "${DEST_DIR}")")"
 
-while IFS= read -r -d '' entry; do
-  base="$(basename "${entry}")"
-  case "${base}" in
-    tests|harness|.git|.github|.gitignore|.gitattributes|.agents|__pycache__)
+copy_plugin_tree() {
+  local src_dir="$1"
+  local dst_dir="$2"
+  local is_root="$3"
+  mkdir -p "${dst_dir}"
+  local entry base entry_key
+  while IFS= read -r -d '' entry; do
+    base="$(basename "${entry}")"
+    if [[ "${is_root}" -eq 1 ]]; then
+      case "${base}" in
+        tests|harness|.git|.github|.gitignore|.gitattributes|.agents|__pycache__)
+          continue
+          ;;
+      esac
+    else
+      case "${base}" in
+        .git|.agents|__pycache__)
+          continue
+          ;;
+      esac
+    fi
+    entry_key="$(normalize_path_key "$(resolve_real_path "${entry}")")"
+    if [[ "${entry_key}" == "${PLUGINS_HOME_KEY}" || "${entry_key}" == "${STAGING_KEY}" || "${entry_key}" == "${DEST_KEY}" || "${entry_key}" == "${LOCK_KEY}" ]]; then
       continue
-      ;;
-  esac
-  entry_key="$(normalize_path_key "$(resolve_real_path "${entry}")")"
-  if [[ "${STAGING_KEY}" == "${entry_key}" || "${STAGING_KEY}" == "${entry_key}/"* || "${DEST_KEY}" == "${entry_key}" || "${DEST_KEY}" == "${entry_key}/"* || "${LOCK_KEY}" == "${entry_key}" || "${LOCK_KEY}" == "${entry_key}/"* ]]; then
-    continue
+    fi
+    if [[ -d "${entry}" && ( "${PLUGINS_HOME_KEY}" == "${entry_key}/"* || "${STAGING_KEY}" == "${entry_key}/"* || "${DEST_KEY}" == "${entry_key}/"* || "${LOCK_KEY}" == "${entry_key}/"* ) ]]; then
+      copy_plugin_tree "${entry}" "${dst_dir}/${base}" 0
+      continue
+    fi
+    cp -R "${entry}" "${dst_dir}/"
+  done < <(find "${src_dir}" -mindepth 1 -maxdepth 1 -print0)
+}
+
+copy_plugin_tree "${PLUGIN_SRC}" "${STAGING_DIR}" 1
+
+for req_staged in \
+  "plugin.json" \
+  "hooks.json" \
+  "rules/cli-anything-generator.md" \
+  "agents/cli-anything-auditor.md" \
+  "skills/cli-anything/SKILL.md" \
+  "skills/cli-anything-refine/SKILL.md" \
+  "skills/cli-anything-test/SKILL.md" \
+  "skills/cli-anything-validate/SKILL.md" \
+  "skills/cli-anything-list/SKILL.md" \
+  "references/HARNESS.md" \
+  "references/docs/PREVIEW_PROTOCOL.md" \
+  "scripts/verify_harness.py" \
+  "scripts/list_harnesses.py" \
+  "scripts/pep420_guard.py" \
+  "scripts/_toml_fallback.py" \
+  "scripts/repl_skin.py" \
+  "scripts/preview_bundle.py" \
+  "scripts/skill_generator.py"; do
+  if [[ ! -f "${STAGING_DIR}/${req_staged}" ]]; then
+    echo "Staged plugin is missing required file: ${req_staged}" >&2
+    exit 1
   fi
-  cp -R "${entry}" "${STAGING_DIR}/"
-done < <(find "${PLUGIN_SRC}" -mindepth 1 -maxdepth 1 -print0)
+done
 
 PYBIN="$(detect_python_bin 2>/dev/null || true)"
 if [[ -n "${PYBIN}" ]]; then
