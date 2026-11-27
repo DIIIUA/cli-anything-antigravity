@@ -114,6 +114,7 @@ try {
             (Join-Path $rs "repl_skin.py") `
             (Join-Path $rs "preview_bundle.py") `
             (Join-Path $rs "skill_generator.py") `
+            (Join-Path $rs "_toml_fallback.py") `
             (Join-Path $rs "verify_harness.py") `
             (Join-Path $rs "list_harnesses.py") `
             (Join-Path $rs "pep420_guard.py")
@@ -146,9 +147,7 @@ try {
     [System.IO.File]::WriteAllText((Join-Path $pluginRoot "PLUGIN_ROOT.txt"), ($pluginRoot + [Environment]::NewLine), $utf8NoBom)
 
     if ($isGlobal) {
-        $pointerDir = Split-Path -Parent $discoveryPointer
-        New-Item -ItemType Directory -Path $pointerDir -Force | Out-Null
-        [System.IO.File]::WriteAllText($discoveryPointer, ($pluginRoot + [Environment]::NewLine), $utf8NoBom)
+        Write-CliAnythingDiscoveryPointer -PointerPath $discoveryPointer -Value $pluginRoot
     }
 } finally {
     if ($stagingDir -and (Test-Path -LiteralPath $stagingDir)) {
